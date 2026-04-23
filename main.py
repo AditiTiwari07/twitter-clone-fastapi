@@ -9,6 +9,7 @@ from pymongo.server_api import ServerApi
 import starlette.status as status
 from datetime import datetime
 from bson import ObjectId
+from datetime import timedelta
 
 # MongoDB connection
 uri = "mongodb+srv://aditiuser:shubh%40123@cluster0.6opbt4j.mongodb.net/?appName=Cluster0"
@@ -33,6 +34,51 @@ tweet_collection = db['tweets']
 
 # Firebase request adapter
 firebase_request_adapter = requests.Request()
+
+# Azurite connection string
+azure_connection_string = {
+    "DefaultEndpointsProtocol": "http",
+    "AccountName": "devstoreaccount1",
+    "AccountKey": "Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==",
+    "BlobEndpoint": "http://127.0.0.1:10000/devstoreaccount1"
+}
+
+azure_connection_str = (
+    f"DefaultEndpointsProtocol=http;"
+    f"AccountName=devstoreaccount1;"
+    f"AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;"
+    f"BlobEndpoint=http://127.0.0.1:10000/devstoreaccount1;"
+)
+
+from azure.storage.blob import BlobServiceClient, AccessPolicy, ContainerSasPermissions, PublicAccess
+from datetime import timedelta
+
+azure_service_client = BlobServiceClient.from_connection_string(azure_connection_str)
+azure_container_name = "twitterclone"
+
+try:
+    azure_container_client = azure_service_client.get_container_client(azure_container_name)
+    azure_container_client.create_container()
+except Exception:
+    print('container exists')
+    azure_container_client = azure_service_client.get_container_client(azure_container_name)
+
+try:
+    container_service_client = azure_service_client.get_container_client(azure_container_name)
+    existing_policies = container_service_client.get_container_access_policy()
+    access_policy = AccessPolicy(
+        permission=ContainerSasPermissions(read=True),
+        expiry=datetime.now() + timedelta(hours=24),
+        start=datetime.now() - timedelta(minutes=1)
+    )
+    identifiers = {'read_access': access_policy}
+    existing_policies['public_access'] = 'blob'
+    azure_container_client.set_container_access_policy(
+        signed_identifiers=identifiers,
+        public_access=PublicAccess.BLOB
+    )
+except Exception as e:
+    print(e)
 
 # Define static and templates directories
 app.mount('/static', StaticFiles(directory='static'), name='static')
@@ -173,3 +219,307 @@ async def postTweet(request: Request):
     }
     tweet_collection.insert_one(tweet_dict)
     return RedirectResponse('/', status_code=status.HTTP_302_FOUND)
+    # Search page
+@app.get("/search", response_class=HTMLResponse)
+async def searchPage(request: Request):
+    id_token = request.cookies.get('token')
+    user_token = validateFirebaseToken(id_token)
+    if not user_token:
+        return RedirectResponse('/', status_code=status.HTTP_302_FOUND)
+    user_info = getUser(user_token)
+    return templates.TemplateResponse('search.html', {
+        'request': request,
+        'user_token': user_token,
+        'user_info': user_info,
+        'users': [],
+        'tweets': [],
+        'error_message': None
+    })
+
+
+# Search post
+@app.post("/search", response_class=HTMLResponse)
+async def searchPost(request: Request):
+    id_token = request.cookies.get('token')
+    user_token = validateFirebaseToken(id_token)
+    if not user_token:
+        return RedirectResponse('/', status_code=status.HTTP_302_FOUND)
+    user_info = getUser(user_token)
+    form = await request.form()
+    search_type = form['search_type']
+    query = form['query']
+
+    users = []
+    tweets = []
+
+    if search_type == 'username':
+        # Search usernames starting with query
+        users = list(user_collection.find(
+            {'username': {'$regex': f'^{query}'}}
+        ))
+    elif search_type == 'tweet':
+        # Search tweet content starting with query
+        tweets = list(tweet_collection.find(
+            {'content': {'$regex': f'^{query}'}}
+        ).sort('created_at', -1))
+
+    return templates.TemplateResponse('search.html', {
+        'request': request,
+        'user_token': user_token,
+        'user_info': user_info,
+        'users': users,
+        'tweets': tweets,
+        'error_message': None
+    })
+
+
+# Profile page
+@app.get("/profile/{username}", response_class=HTMLResponse)
+async def profilePage(request: Request, username: str):
+    id_token = request.cookies.get('token')
+    user_token = validateFirebaseToken(id_token)
+    if not user_token:
+        return RedirectResponse('/', status_code=status.HTTP_302_FOUND)
+    user_info = getUser(user_token)
+
+    # Get the profile user
+    profile_user = user_collection.find_one({'username': username})
+    if not profile_user:
+        return RedirectResponse('/', status_code=status.HTTP_302_FOUND)
+
+    # Get last 10 tweets of this user
+    profile_tweets = list(tweet_collection.find(
+        {'username': username}
+    ).sort('created_at', -1).limit(10))
+
+    # Check if current user is following this profile
+    is_following = username in user_info.get('following', [])
+
+    return templates.TemplateResponse('profile.html', {
+        'request': request,
+        'user_token': user_token,
+        'user_info': user_info,
+        'profile_user': profile_user,
+        'profile_tweets': profile_tweets,
+        'is_following': is_following,
+        'error_message': None
+    })
+
+
+# Follow user
+@app.post("/follow/{username}", response_class=RedirectResponse)
+async def followUser(request: Request, username: str):
+    id_token = request.cookies.get('token')
+    user_token = validateFirebaseToken(id_token)
+    if not user_token:
+        return RedirectResponse('/', status_code=status.HTTP_302_FOUND)
+    user_info = getUser(user_token)
+
+    # Add to following list
+    user_collection.update_one(
+        {'user_id': user_token['user_id']},
+        {'$addToSet': {'following': username}}
+    )
+    # Add to followers list of the other user
+    user_collection.update_one(
+        {'username': username},
+        {'$addToSet': {'followers': user_info['username']}}
+    )
+    return RedirectResponse(f'/profile/{username}',
+        status_code=status.HTTP_302_FOUND)
+
+
+# Upload profile picture
+@app.post("/upload-profile-pic", response_class=RedirectResponse)
+async def uploadProfilePic(request: Request):
+    id_token = request.cookies.get('token')
+    user_token = validateFirebaseToken(id_token)
+    if not user_token:
+        return RedirectResponse('/', status_code=status.HTTP_302_FOUND)
+    user_info = getUser(user_token)
+
+    form = await request.form()
+    file = form['profile_pic']
+
+    # Validate file type
+    if file.filename == '':
+        return RedirectResponse(f'/profile/{user_info["username"]}',
+            status_code=status.HTTP_302_FOUND)
+
+    if not file.filename.endswith(('.jpg', '.jpeg', '.png')):
+        return RedirectResponse(f'/profile/{user_info["username"]}',
+            status_code=status.HTTP_302_FOUND)
+
+    # Save to Azurite
+    contents = await file.read()
+    blob_name = f'profile_pics/{user_info["username"]}/{file.filename}'
+    azure_container_client.upload_blob(
+        name=blob_name, data=contents, overwrite=True)
+
+    # Get URL and save to user
+    blob_client = azure_container_client.get_blob_client(blob_name)
+    pic_url = blob_client.url
+
+    user_collection.update_one(
+        {'user_id': user_token['user_id']},
+        {'$set': {'profile_pic': pic_url}}
+    )
+    return RedirectResponse(f'/profile/{user_info["username"]}',
+        status_code=status.HTTP_302_FOUND)
+    
+# Unfollow user
+@app.post("/unfollow/{username}", response_class=RedirectResponse)
+async def unfollowUser(request: Request, username: str):
+    id_token = request.cookies.get('token')
+    user_token = validateFirebaseToken(id_token)
+    if not user_token:
+        return RedirectResponse('/', status_code=status.HTTP_302_FOUND)
+    user_info = getUser(user_token)
+
+    # Remove from following list
+    user_collection.update_one(
+        {'user_id': user_token['user_id']},
+        {'$pull': {'following': username}}
+    )
+    # Remove from followers list of the other user
+    user_collection.update_one(
+        {'username': username},
+        {'$pull': {'followers': user_info['username']}}
+    )
+    return RedirectResponse(f'/profile/{username}',
+        status_code=status.HTTP_302_FOUND)
+
+
+# Update bio
+@app.post("/update-bio", response_class=RedirectResponse)
+async def updateBio(request: Request):
+    id_token = request.cookies.get('token')
+    user_token = validateFirebaseToken(id_token)
+    if not user_token:
+        return RedirectResponse('/', status_code=status.HTTP_302_FOUND)
+    user_info = getUser(user_token)
+
+    form = await request.form()
+    bio = form['bio']
+
+    if len(bio) > 280:
+        return RedirectResponse(f'/profile/{user_info["username"]}',
+            status_code=status.HTTP_302_FOUND)
+
+    user_collection.update_one(
+        {'user_id': user_token['user_id']},
+        {'$set': {'bio': bio}}
+    )
+    return RedirectResponse(f'/profile/{user_info["username"]}',
+        status_code=status.HTTP_302_FOUND)
+
+
+# Delete tweet
+@app.post("/delete-tweet", response_class=RedirectResponse)
+async def deleteTweet(request: Request):
+    id_token = request.cookies.get('token')
+    user_token = validateFirebaseToken(id_token)
+    if not user_token:
+        return RedirectResponse('/', status_code=status.HTTP_302_FOUND)
+    user_info = getUser(user_token)
+
+    form = await request.form()
+    tweet_id = form['tweet_id']
+
+    # Only delete if the tweet belongs to this user
+    tweet_collection.delete_one({
+        '_id': ObjectId(tweet_id),
+        'user_id': user_token['user_id']
+    })
+    return RedirectResponse('/', status_code=status.HTTP_302_FOUND)
+
+
+# Edit tweet page
+@app.get("/edit-tweet/{tweet_id}", response_class=HTMLResponse)
+async def editTweetPage(request: Request, tweet_id: str):
+    id_token = request.cookies.get('token')
+    user_token = validateFirebaseToken(id_token)
+    if not user_token:
+        return RedirectResponse('/', status_code=status.HTTP_302_FOUND)
+    user_info = getUser(user_token)
+
+    tweet = tweet_collection.find_one({
+        '_id': ObjectId(tweet_id),
+        'user_id': user_token['user_id']
+    })
+    if not tweet:
+        return RedirectResponse('/', status_code=status.HTTP_302_FOUND)
+
+    return templates.TemplateResponse('edit_tweet.html', {
+        'request': request,
+        'user_token': user_token,
+        'user_info': user_info,
+        'tweet': tweet,
+        'error_message': None
+    })
+
+
+# Edit tweet post
+@app.post("/edit-tweet/{tweet_id}", response_class=RedirectResponse)
+async def editTweet(request: Request, tweet_id: str):
+    id_token = request.cookies.get('token')
+    user_token = validateFirebaseToken(id_token)
+    if not user_token:
+        return RedirectResponse('/', status_code=status.HTTP_302_FOUND)
+    user_info = getUser(user_token)
+
+    form = await request.form()
+    content = form['content']
+
+    if not content or len(content) > 280:
+        return RedirectResponse('/', status_code=status.HTTP_302_FOUND)
+
+    # Check for image upload
+    image_url = ''
+    file = form.get('tweet_image')
+    if file and file.filename != '':
+        if file.filename.endswith(('.jpg', '.jpeg', '.png')):
+            contents = await file.read()
+            blob_name = f'tweet_images/{tweet_id}/{file.filename}'
+            azure_container_client.upload_blob(
+                name=blob_name, data=contents, overwrite=True)
+            blob_client = azure_container_client.get_blob_client(blob_name)
+            image_url = blob_client.url
+
+    # Update tweet
+    update_data = {'content': content}
+    if image_url:
+        update_data['image'] = image_url
+
+    tweet_collection.update_one(
+        {'_id': ObjectId(tweet_id), 'user_id': user_token['user_id']},
+        {'$set': update_data}
+    )
+    return RedirectResponse('/', status_code=status.HTTP_302_FOUND)
+
+
+# Timeline
+@app.get("/timeline", response_class=HTMLResponse)
+async def timeline(request: Request):
+    id_token = request.cookies.get('token')
+    user_token = validateFirebaseToken(id_token)
+    if not user_token:
+        return RedirectResponse('/', status_code=status.HTTP_302_FOUND)
+    user_info = getUser(user_token)
+
+    # Get following list plus own username
+    following = user_info.get('following', [])
+    following.append(user_info['username'])
+
+    # Get last 20 tweets from following list
+    tweets = list(tweet_collection.find(
+        {'username': {'$in': following}}
+    ).sort('created_at', -1).limit(20))
+
+    return templates.TemplateResponse('timeline.html', {
+        'request': request,
+        'user_token': user_token,
+        'user_info': user_info,
+        'tweets': tweets,
+        'error_message': None
+    })

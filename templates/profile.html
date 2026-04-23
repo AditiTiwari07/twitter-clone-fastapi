@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Profile</title>
+        <link type="text/css" href="{{ url_for('static', path='/styles.css') }}" rel="stylesheet"/>
+        <script type="module" src="{{ url_for('static', path='/firebase-login.js') }}"></script>
+    </head>
+    <body>
+        <nav>
+            <a href="/"><strong>🐦 Twitter Clone</strong></a>
+            <div>
+                {% if user_token %}
+                <a href="/timeline">Timeline</a>
+                <a href="/search">Search</a>
+                <a href="/profile/{{ user_info['username'] }}">My Profile</a>
+                {% endif %}
+                <button id="sign-out" hidden="true" class="btn">Sign Out</button>
+            </div>
+        </nav>
+
+        <div class="container">
+            <!-- Profile header -->
+            <div class="tweet-box">
+                {% if profile_user['profile_pic'] %}
+                <img src="{{ profile_user['profile_pic'] }}" class="profile-pic"/>
+                {% endif %}
+                <h2>@{{ profile_user['username'] }}</h2>
+
+                {% if profile_user['bio'] %}
+                <p>{{ profile_user['bio'] }}</p>
+                {% endif %}
+
+                <p>
+                    Followers: {{ profile_user['followers']|length }} |
+                    Following: {{ profile_user['following']|length }}
+                </p>
+
+                <!-- Follow/Unfollow button -->
+                {% if user_info['username'] != profile_user['username'] %}
+                    {% if is_following %}
+                    <form action="/unfollow/{{ profile_user['username'] }}" method="post" style="display:inline">
+                        <input type="submit" value="Unfollow" class="btn-danger"/>
+                    </form>
+                    {% else %}
+                    <form action="/follow/{{ profile_user['username'] }}" method="post" style="display:inline">
+                        <input type="submit" value="Follow" class="btn"/>
+                    </form>
+                    {% endif %}
+                {% endif %}
+
+                <!-- Profile picture upload (only for own profile) -->
+                {% if user_info['username'] == profile_user['username'] %}
+                <br/><br/>
+                <form action="/upload-profile-pic" method="post" enctype="multipart/form-data">
+                    <input type="file" name="profile_pic" accept=".jpg,.jpeg,.png"/>
+                    <input type="submit" value="Update Profile Picture" class="btn"/>
+                </form>
+
+                <!-- Bio edit -->
+                <form action="/update-bio" method="post">
+                    <textarea name="bio" maxlength="280" 
+                    placeholder="Write a short bio...">{{ profile_user['bio'] }}</textarea><br/>
+                    <input type="submit" value="Update Bio" class="btn"/>
+                </form>
+                {% endif %}
+            </div>
+
+            <!-- Profile tweets -->
+            <h3>Tweets</h3>
+            {% for tweet in profile_tweets %}
+            <div class="tweet">
+                <span class="tweet-author">@{{ tweet['username'] }}</span>
+                <span class="tweet-time"> · {{ tweet['created_at'].strftime('%d %b %Y %H:%M') }}</span>
+                <p>{{ tweet['content'] }}</p>
+                {% if tweet['image'] %}
+                <img src="{{ tweet['image'] }}" style="max-width:100%"/>
+                {% endif %}
+                {% if tweet['username'] == user_info['username'] %}
+                <form action="/delete-tweet" method="post" style="display:inline">
+                    <input type="hidden" name="tweet_id" value="{{ tweet['_id'] }}"/>
+                    <input type="submit" value="Delete" class="btn-danger"/>
+                </form>
+                <a href="/edit-tweet/{{ tweet['_id'] }}">
+                    <button class="btn">Edit</button>
+                </a>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    </body>
+</html>
