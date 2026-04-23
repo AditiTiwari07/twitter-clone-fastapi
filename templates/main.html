@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Twitter Clone</title>
+        <link type="text/css" href="{{ url_for('static', path='/styles.css') }}" rel="stylesheet"/>
+        <script type="module" src="{{ url_for('static', path='/firebase-login.js') }}"></script>
+    </head>
+    <body>
+        <nav>
+            <a href="/"><strong>🐦 Twitter Clone</strong></a>
+            <div>
+                {% if user_token %}
+                <a href="/timeline">Timeline</a>
+                <a href="/search">Search</a>
+                <a href="/profile/{{ user_info['username'] }}">My Profile</a>
+                {% endif %}
+                <button id="sign-out" hidden="true" class="btn">Sign Out</button>
+            </div>
+        </nav>
+
+        <div class="container">
+            <div id="login-box" hidden="true">
+                Email:<input type="text" name="" id="email"/><br/>
+                Password:<input type="password" name="" id="password"/><br/>
+                <button id="login" class="btn">Login</button>
+                <button id="sign-up" class="btn">Sign Up</button>
+            </div>
+
+            {% if user_token %}
+                <h2>Welcome, {{ user_info['username'] }}!</h2>
+                <p>{{ error_message }}</p>
+
+                <!-- Post a tweet -->
+                <div class="tweet-box">
+                    <form action="/post-tweet" method="post">
+                        <textarea name="content" maxlength="280" rows="3" 
+                        placeholder="What's happening?"></textarea><br/>
+                        <input type="submit" value="Tweet" class="btn"/>
+                    </form>
+                </div>
+
+                <!-- Show tweets -->
+                {% for tweet in tweets %}
+                <div class="tweet">
+                    <span class="tweet-author">@{{ tweet['username'] }}</span>
+                    <span class="tweet-time"> · {{ tweet['created_at'].strftime('%d %b %Y %H:%M') }}</span>
+                    <p>{{ tweet['content'] }}</p>
+                    {% if tweet['username'] == user_info['username'] %}
+                    <form action="/delete-tweet" method="post" style="display:inline">
+                        <input type="hidden" name="tweet_id" value="{{ tweet['_id'] }}"/>
+                        <input type="submit" value="Delete" class="btn-danger"/>
+                    </form>
+                    <a href="/edit-tweet/{{ tweet['_id'] }}"><button class="btn">Edit</button></a>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            {% endif %}
+        </div>
+    </body>
+</html>

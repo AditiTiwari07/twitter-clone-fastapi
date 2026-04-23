@@ -1,0 +1,104 @@
+body {
+    font-family: "helvetica", sans-serif;
+    background-color: #f5f8fa;
+    margin: 0;
+    padding: 0;
+}
+
+.container {
+    max-width: 600px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+nav {
+    background-color: #1da1f2;
+    padding: 10px 20px;
+    color: white;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+nav a {
+    color: white;
+    text-decoration: none;
+    margin-left: 15px;
+}
+
+.tweet-box {
+    background: white;
+    border: 1px solid #e1e8ed;
+    border-radius: 10px;
+    padding: 15px;
+    margin-bottom: 15px;
+}
+
+.tweet-box textarea {
+    width: 100%;
+    border: none;
+    outline: none;
+    font-size: 16px;
+    resize: none;
+}
+
+.btn {
+    background-color: #1da1f2;
+    color: white;
+    border: none;
+    border-radius: 20px;
+    padding: 8px 20px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.btn:hover {
+    background-color: #0d8dd9;
+}
+
+.btn-danger {
+    background-color: #e0245e;
+    color: white;
+    border: none;
+    border-radius: 20px;
+    padding: 5px 15px;
+    cursor: pointer;
+    font-size: 13px;
+}
+
+.tweet {
+    background: white;
+    border: 1px solid #e1e8ed;
+    border-radius: 10px;
+    padding: 15px;
+    margin-bottom: 10px;
+}
+
+.tweet-author {
+    font-weight: bold;
+    color: #1da1f2;
+}
+
+.tweet-time {
+    color: #657786;
+    font-size: 12px;
+}
+
+input[type="text"], input[type="email"], input[type="password"] {
+    padding: 8px;
+    border: 1px solid #e1e8ed;
+    border-radius: 5px;
+    font-size: 14px;
+}
+
+.error {
+    color: red;
+    font-size: 13px;
+}
+
+.profile-pic {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    object-fit: cover;
+}

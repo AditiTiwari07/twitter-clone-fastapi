@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Set Username</title>
+        <link type="text/css" href="{{ url_for('static', path='/styles.css') }}" rel="stylesheet"/>
+        <script type="module" src="{{ url_for('static', path='/firebase-login.js') }}"></script>
+    </head>
+    <body>
+        <nav>
+            <a href="/"><strong>🐦 Twitter Clone</strong></a>
+            <div>
+                <button id="sign-out" hidden="true" class="btn">Sign Out</button>
+            </div>
+        </nav>
+
+        <div class="container">
+            <h2>Welcome! Please choose a username</h2>
+            <p>This will be your unique username on Twitter Clone.</p>
+
+            {% if error_message %}
+            <p class="error">{{ error_message }}</p>
+            {% endif %}
+
+            <form action="/set-username" method="post">
+                <input type="text" name="username" placeholder="Enter username" 
+                required maxlength="50"/><br/><br/>
+                <input type="submit" value="Set Username" class="btn"/>
+            </form>
+        </div>
+    </body>
+</html>
