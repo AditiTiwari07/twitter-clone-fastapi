@@ -56,10 +56,11 @@ except Exception:
 try:
     azure_container_client.set_container_access_policy(
         signed_identifiers={},
-        public_access=PublicAccess.BLOB
+        public_access=PublicAccess.CONTAINER
     )
+    print("Container set to public read access.")
 except Exception as e:
-    print(e)
+    print(f"Access policy error: {e}")
 
 # Define static and templates directories
 app.mount('/static', StaticFiles(directory='static'), name='static')
@@ -122,11 +123,11 @@ async def root(request: Request):
 
     # Get all tweets sorted by newest first
     tweets = list(tweet_collection.find().sort('created_at', -1).limit(20))
-    # Add profile pic to each tweet
     for tweet in tweets:
         tweet_user = user_collection.find_one({'username': tweet['username']})
-        if tweet_user:
-            tweet['profile_pic'] = tweet_user.get('profile_pic', '')
+        tweet['profile_pic'] = tweet_user.get('profile_pic', '') if tweet_user else ''
+        if 'image' not in tweet:
+            tweet['image'] = ''
 
     return templates.TemplateResponse('main.html', {
         'request': request,
@@ -287,8 +288,9 @@ async def profilePage(request: Request, username: str):
     ).sort('created_at', -1).limit(10))
     for tweet in profile_tweets:
         tweet_user = user_collection.find_one({'username': tweet['username']})
-        if tweet_user:
-            tweet['profile_pic'] = tweet_user.get('profile_pic', '')
+        tweet['profile_pic'] = tweet_user.get('profile_pic', '') if tweet_user else ''
+        if 'image' not in tweet:
+            tweet['image'] = ''
 
     is_following = username in user_info.get('following', [])
 
@@ -462,7 +464,10 @@ async def editTweet(request: Request, tweet_id: str):
     if not content or len(content) > 280:
         return RedirectResponse('/', status_code=status.HTTP_302_FOUND)
 
-    image_url = ''
+    # Preserve existing image if no new one uploaded
+    existing_tweet = tweet_collection.find_one({'_id': ObjectId(tweet_id)})
+    image_url = existing_tweet.get('image', '') if existing_tweet else ''
+
     file = form.get('tweet_image')
     if file and file.filename != '':
         if file.filename.endswith(('.jpg', '.jpeg', '.png')):
@@ -501,8 +506,9 @@ async def timeline(request: Request):
     ).sort('created_at', -1).limit(20))
     for tweet in tweets:
         tweet_user = user_collection.find_one({'username': tweet['username']})
-        if tweet_user:
-            tweet['profile_pic'] = tweet_user.get('profile_pic', '')
+        tweet['profile_pic'] = tweet_user.get('profile_pic', '') if tweet_user else ''
+        if 'image' not in tweet:
+            tweet['image'] = ''
 
     return templates.TemplateResponse('timeline.html', {
         'request': request,
@@ -537,4 +543,4 @@ async def retweet(request: Request, tweet_id: str):
         'original_username': original_tweet['username']
     }
     tweet_collection.insert_one(retweet_dict)
-    return RedirectResponse('/', status_code=status.HTTP_302_FOUND)
+    return

@@ -72,7 +72,7 @@
                 <span class="tweet-author">@{{ tweet['username'] }}</span>
                 <span class="tweet-time"> · {{ tweet['created_at'].strftime('%d %b %Y %H:%M') }}</span>
                 <p>{{ tweet['content'] }}</p>
-                {% if tweet['image'] %}
+                {% if tweet.get('image') %}
                 <img src="{{ tweet['image'] }}" style="max-width:100%"/>
                 {% endif %}
                 {% if tweet['username'] == user_info['username'] %}
