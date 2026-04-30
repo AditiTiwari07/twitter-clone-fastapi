@@ -31,27 +31,53 @@
                 <p>{{ error_message }}</p>
 
                 <!-- Post a tweet -->
-                <div class="tweet-box">
-                    <form action="/post-tweet" method="post">
-                        <textarea name="content" maxlength="280" rows="3" 
-                        placeholder="What's happening?"></textarea><br/>
-                        <input type="submit" value="Tweet" class="btn"/>
-                    </form>
-                </div>
+                <!-- Post a tweet -->
+<div class="tweet-box">
+    <form action="/post-tweet" method="post" enctype="multipart/form-data">
+        <textarea name="content" maxlength="280" rows="3" 
+        placeholder="What's happening?"></textarea><br/>
+        <input type="file" name="tweet_image" accept=".jpg,.jpeg,.png"/><br/><br/>
+        <input type="submit" value="Tweet" class="btn"/>
+    </form>
+</div>
 
                 <!-- Show tweets -->
                 {% for tweet in tweets %}
                 <div class="tweet">
-                    <span class="tweet-author">@{{ tweet['username'] }}</span>
-                    <span class="tweet-time"> · {{ tweet['created_at'].strftime('%d %b %Y %H:%M') }}</span>
-                    <p>{{ tweet['content'] }}</p>
+    {% if tweet.get('profile_pic') %}
+    <img src="{{ tweet['profile_pic'] }}" class="profile-pic"/>
+    {% endif %}
+    <span class="tweet-author">
+        <a href="/profile/{{ tweet['username'] }}" style="color:#1da1f2; text-decoration:none;">
+        @{{ tweet['username'] }}</a>
+    </span>
+    <span class="tweet-time"> · {{ tweet['created_at'].strftime('%d %b %Y %H:%M') }}</span>
+    {% if tweet.get('image') %}
+    <br/><img src="{{ tweet['image'] }}" style="max-width:100%; margin-top:10px;"/>
+    {% endif %}
+    <p>{{ tweet['content'] }}</p>
                     {% if tweet['username'] == user_info['username'] %}
-                    <form action="/delete-tweet" method="post" style="display:inline">
-                        <input type="hidden" name="tweet_id" value="{{ tweet['_id'] }}"/>
-                        <input type="submit" value="Delete" class="btn-danger"/>
-                    </form>
-                    <a href="/edit-tweet/{{ tweet['_id'] }}"><button class="btn">Edit</button></a>
-                    {% endif %}
+<form action="/delete-tweet" method="post" style="display:inline">
+    <input type="hidden" name="tweet_id" value="{{ tweet['_id'] }}"/>
+    <input type="submit" value="Delete" class="btn-danger"/>
+</form>
+<a href="/edit-tweet/{{ tweet['_id'] }}">
+    <button class="btn">Edit</button>
+</a>
+{% endif %}
+
+{% if tweet['username'] != user_info['username'] %}
+<form action="/retweet/{{ tweet['_id'] }}" method="post" style="display:inline">
+    <input type="submit" value="🔁 Retweet" class="btn"/>
+</form>
+{% endif %}
+
+{% if tweet.get('is_retweet') %}
+<p style="color:#657786; font-size:12px;">
+    🔁 Retweeted by @{{ tweet['retweeted_by'] }} 
+    (original by @{{ tweet['original_username'] }})
+</p>
+{% endif %}
                 </div>
                 {% endfor %}
             {% endif %}

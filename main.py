@@ -142,6 +142,11 @@ async def root(request: Request):
 
     # Get all tweets sorted by newest first
     tweets = list(tweet_collection.find().sort('created_at', -1).limit(20))
+# Add profile pic to each tweet
+for tweet in tweets:
+    tweet_user = user_collection.find_one({'username': tweet['username']})
+    if tweet_user:
+        tweet['profile_pic'] = tweet_user.get('profile_pic', '')
 
     return templates.TemplateResponse('main.html', {
         'request': request,
@@ -195,6 +200,7 @@ async def setUsername(request: Request):
 
 
 # Post a tweet
+# Post a tweet
 @app.post("/post-tweet", response_class=RedirectResponse)
 async def postTweet(request: Request):
     id_token = request.cookies.get('token')
@@ -210,12 +216,27 @@ async def postTweet(request: Request):
     if not content or len(content) > 280:
         return RedirectResponse('/', status_code=status.HTTP_302_FOUND)
 
+    # Check for image upload
+    image_url = ''
+    file = form.get('tweet_image')
+    if file and file.filename != '':
+        if file.filename.endswith(('.jpg', '.jpeg', '.png')):
+            contents = await file.read()
+            blob_name = f'tweet_images/{user_info["username"]}/{file.filename}'
+            azure_container_client.upload_blob(
+                name=blob_name, data=contents, overwrite=True)
+            blob_client = azure_container_client.get_blob_client(blob_name)
+            image_url = blob_client.url
+
     tweet_dict = {
         'user_id': user_token['user_id'],
         'username': user_info['username'],
         'content': content,
         'created_at': datetime.now(),
-        'image': ''
+        'image': image_url,
+        'is_retweet': False,
+        'retweeted_by': '',
+        'original_username': ''
     }
     tweet_collection.insert_one(tweet_dict)
     return RedirectResponse('/', status_code=status.HTTP_302_FOUND)
@@ -523,3 +544,31 @@ async def timeline(request: Request):
         'tweets': tweets,
         'error_message': None
     })
+
+# Retweet
+@app.post("/retweet/{tweet_id}", response_class=RedirectResponse)
+async def retweet(request: Request, tweet_id: str):
+    id_token = request.cookies.get('token')
+    user_token = validateFirebaseToken(id_token)
+    if not user_token:
+        return RedirectResponse('/', status_code=status.HTTP_302_FOUND)
+    user_info = getUser(user_token)
+
+    # Get original tweet
+    original_tweet = tweet_collection.find_one({'_id': ObjectId(tweet_id)})
+    if not original_tweet:
+        return RedirectResponse('/', status_code=status.HTTP_302_FOUND)
+
+    # Create retweet document
+    retweet_dict = {
+        'user_id': user_token['user_id'],
+        'username': user_info['username'],
+        'content': original_tweet['content'],
+        'created_at': datetime.now(),
+        'image': original_tweet.get('image', ''),
+        'is_retweet': True,
+        'retweeted_by': user_info['username'],
+        'original_username': original_tweet['username']
+    }
+    tweet_collection.insert_one(retweet_dict)
+    return RedirectResponse('/', status_code=status.HTTP_302_FOUND)

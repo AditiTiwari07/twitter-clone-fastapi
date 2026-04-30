@@ -36,14 +36,27 @@
                     <img src="{{ tweet['image'] }}" style="max-width:100%"/>
                     {% endif %}
                     {% if tweet['username'] == user_info['username'] %}
-                    <form action="/delete-tweet" method="post" style="display:inline">
-                        <input type="hidden" name="tweet_id" value="{{ tweet['_id'] }}"/>
-                        <input type="submit" value="Delete" class="btn-danger"/>
-                    </form>
-                    <a href="/edit-tweet/{{ tweet['_id'] }}">
-                        <button class="btn">Edit</button>
-                    </a>
-                    {% endif %}
+<form action="/delete-tweet" method="post" style="display:inline">
+    <input type="hidden" name="tweet_id" value="{{ tweet['_id'] }}"/>
+    <input type="submit" value="Delete" class="btn-danger"/>
+</form>
+<a href="/edit-tweet/{{ tweet['_id'] }}">
+    <button class="btn">Edit</button>
+</a>
+{% endif %}
+
+{% if tweet['username'] != user_info['username'] %}
+<form action="/retweet/{{ tweet['_id'] }}" method="post" style="display:inline">
+    <input type="submit" value="🔁 Retweet" class="btn"/>
+</form>
+{% endif %}
+
+{% if tweet.get('is_retweet') %}
+<p style="color:#657786; font-size:12px;">
+    🔁 Retweeted by @{{ tweet['retweeted_by'] }}
+    (original by @{{ tweet['original_username'] }})
+</p>
+{% endif %}
                 </div>
                 {% endfor %}
             {% else %}
