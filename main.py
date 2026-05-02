@@ -14,28 +14,22 @@ from azure.storage.blob import BlobServiceClient, AccessPolicy, ContainerSasPerm
 # MongoDB connection
 uri = "mongodb+srv://aditiuser:shubh%40123@cluster0.6opbt4j.mongodb.net/?appName=Cluster0"
 
-# Create a new client and connect to the server
 client = MongoClient(uri, server_api=ServerApi('1'))
 
-# Send a ping to confirm a successful connection
 try:
     client.admin.command('ping')
     print("Pinged your deployment. You successfully connected to MongoDB!")
 except Exception as e:
     print(e)
 
-# Define the app
 app = FastAPI()
 
-# Open the database and collections
 db = client['A2-3195197']
 user_collection = db['users']
 tweet_collection = db['tweets']
 
-# Firebase request adapter
 firebase_request_adapter = requests.Request()
 
-# Azurite connection string
 azure_connection_str = (
     "DefaultEndpointsProtocol=http;"
     "AccountName=devstoreaccount1;"
@@ -44,7 +38,7 @@ azure_connection_str = (
 )
 
 azure_service_client = BlobServiceClient.from_connection_string(azure_connection_str)
-azure_container_name = "twitterclone"
+azure_container_name = "3195197-twitterclone"
 
 try:
     azure_container_client = azure_service_client.get_container_client(azure_container_name)
@@ -62,12 +56,10 @@ try:
 except Exception as e:
     print(f"Access policy error: {e}")
 
-# Define static and templates directories
 app.mount('/static', StaticFiles(directory='static'), name='static')
 templates = Jinja2Templates(directory='templates')
 
 
-# Function to validate firebase token
 def validateFirebaseToken(id_token):
     if not id_token:
         return None
@@ -80,7 +72,6 @@ def validateFirebaseToken(id_token):
     return user_token
 
 
-# Function to get or create user
 def getUser(user_token):
     user = user_collection.find_one({'user_id': user_token['user_id']})
     if not user:
@@ -97,7 +88,6 @@ def getUser(user_token):
     return user
 
 
-# Root route
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
     id_token = request.cookies.get('token')
@@ -121,7 +111,6 @@ async def root(request: Request):
     if not user_info['username']:
         return RedirectResponse('/set-username', status_code=status.HTTP_302_FOUND)
 
-    # Get all tweets sorted by newest first
     tweets = list(tweet_collection.find().sort('created_at', -1).limit(20))
     for tweet in tweets:
         tweet_user = user_collection.find_one({'username': tweet['username']})
@@ -138,7 +127,6 @@ async def root(request: Request):
     })
 
 
-# Set username page
 @app.get("/set-username", response_class=HTMLResponse)
 async def setUsernamePage(request: Request):
     id_token = request.cookies.get('token')
@@ -152,7 +140,6 @@ async def setUsernamePage(request: Request):
     })
 
 
-# Set username post
 @app.post("/set-username", response_class=RedirectResponse)
 async def setUsername(request: Request):
     id_token = request.cookies.get('token')
@@ -178,7 +165,6 @@ async def setUsername(request: Request):
     return RedirectResponse('/', status_code=status.HTTP_302_FOUND)
 
 
-# Post a tweet
 @app.post("/post-tweet", response_class=RedirectResponse)
 async def postTweet(request: Request):
     id_token = request.cookies.get('token')
@@ -218,7 +204,6 @@ async def postTweet(request: Request):
     return RedirectResponse('/', status_code=status.HTTP_302_FOUND)
 
 
-# Search page
 @app.get("/search", response_class=HTMLResponse)
 async def searchPage(request: Request):
     id_token = request.cookies.get('token')
@@ -232,11 +217,12 @@ async def searchPage(request: Request):
         'user_info': user_info,
         'users': [],
         'tweets': [],
-        'error_message': None
+        'error_message': None,
+        'query': '',
+        'search_type': 'username'
     })
 
 
-# Search post
 @app.post("/search", response_class=HTMLResponse)
 async def searchPost(request: Request):
     id_token = request.cookies.get('token')
@@ -266,11 +252,12 @@ async def searchPost(request: Request):
         'user_info': user_info,
         'users': users,
         'tweets': tweets,
-        'error_message': None
+        'error_message': None,
+        'query': query,
+        'search_type': search_type
     })
 
 
-# Profile page
 @app.get("/profile/{username}", response_class=HTMLResponse)
 async def profilePage(request: Request, username: str):
     id_token = request.cookies.get('token')
@@ -305,7 +292,6 @@ async def profilePage(request: Request, username: str):
     })
 
 
-# Follow user
 @app.post("/follow/{username}", response_class=RedirectResponse)
 async def followUser(request: Request, username: str):
     id_token = request.cookies.get('token')
@@ -322,11 +308,9 @@ async def followUser(request: Request, username: str):
         {'username': username},
         {'$addToSet': {'followers': user_info['username']}}
     )
-    return RedirectResponse(f'/profile/{username}',
-        status_code=status.HTTP_302_FOUND)
+    return RedirectResponse(f'/profile/{username}', status_code=status.HTTP_302_FOUND)
 
 
-# Unfollow user
 @app.post("/unfollow/{username}", response_class=RedirectResponse)
 async def unfollowUser(request: Request, username: str):
     id_token = request.cookies.get('token')
@@ -343,11 +327,9 @@ async def unfollowUser(request: Request, username: str):
         {'username': username},
         {'$pull': {'followers': user_info['username']}}
     )
-    return RedirectResponse(f'/profile/{username}',
-        status_code=status.HTTP_302_FOUND)
+    return RedirectResponse(f'/profile/{username}', status_code=status.HTTP_302_FOUND)
 
 
-# Upload profile picture
 @app.post("/upload-profile-pic", response_class=RedirectResponse)
 async def uploadProfilePic(request: Request):
     id_token = request.cookies.get('token')
@@ -360,17 +342,14 @@ async def uploadProfilePic(request: Request):
     file = form['profile_pic']
 
     if file.filename == '':
-        return RedirectResponse(f'/profile/{user_info["username"]}',
-            status_code=status.HTTP_302_FOUND)
+        return RedirectResponse(f'/profile/{user_info["username"]}', status_code=status.HTTP_302_FOUND)
 
     if not file.filename.endswith(('.jpg', '.jpeg', '.png')):
-        return RedirectResponse(f'/profile/{user_info["username"]}',
-            status_code=status.HTTP_302_FOUND)
+        return RedirectResponse(f'/profile/{user_info["username"]}', status_code=status.HTTP_302_FOUND)
 
     contents = await file.read()
     blob_name = f'profile_pics/{user_info["username"]}/{file.filename}'
-    azure_container_client.upload_blob(
-        name=blob_name, data=contents, overwrite=True)
+    azure_container_client.upload_blob(name=blob_name, data=contents, overwrite=True)
     blob_client = azure_container_client.get_blob_client(blob_name)
     pic_url = blob_client.url
 
@@ -378,11 +357,9 @@ async def uploadProfilePic(request: Request):
         {'user_id': user_token['user_id']},
         {'$set': {'profile_pic': pic_url}}
     )
-    return RedirectResponse(f'/profile/{user_info["username"]}',
-        status_code=status.HTTP_302_FOUND)
+    return RedirectResponse(f'/profile/{user_info["username"]}', status_code=status.HTTP_302_FOUND)
 
 
-# Update bio
 @app.post("/update-bio", response_class=RedirectResponse)
 async def updateBio(request: Request):
     id_token = request.cookies.get('token')
@@ -395,18 +372,15 @@ async def updateBio(request: Request):
     bio = form['bio']
 
     if len(bio) > 280:
-        return RedirectResponse(f'/profile/{user_info["username"]}',
-            status_code=status.HTTP_302_FOUND)
+        return RedirectResponse(f'/profile/{user_info["username"]}', status_code=status.HTTP_302_FOUND)
 
     user_collection.update_one(
         {'user_id': user_token['user_id']},
         {'$set': {'bio': bio}}
     )
-    return RedirectResponse(f'/profile/{user_info["username"]}',
-        status_code=status.HTTP_302_FOUND)
+    return RedirectResponse(f'/profile/{user_info["username"]}', status_code=status.HTTP_302_FOUND)
 
 
-# Delete tweet
 @app.post("/delete-tweet", response_class=RedirectResponse)
 async def deleteTweet(request: Request):
     id_token = request.cookies.get('token')
@@ -424,7 +398,6 @@ async def deleteTweet(request: Request):
     return RedirectResponse('/', status_code=status.HTTP_302_FOUND)
 
 
-# Edit tweet page
 @app.get("/edit-tweet/{tweet_id}", response_class=HTMLResponse)
 async def editTweetPage(request: Request, tweet_id: str):
     id_token = request.cookies.get('token')
@@ -449,7 +422,6 @@ async def editTweetPage(request: Request, tweet_id: str):
     })
 
 
-# Edit tweet post
 @app.post("/edit-tweet/{tweet_id}", response_class=RedirectResponse)
 async def editTweet(request: Request, tweet_id: str):
     id_token = request.cookies.get('token')
@@ -464,7 +436,6 @@ async def editTweet(request: Request, tweet_id: str):
     if not content or len(content) > 280:
         return RedirectResponse('/', status_code=status.HTTP_302_FOUND)
 
-    # Preserve existing image if no new one uploaded
     existing_tweet = tweet_collection.find_one({'_id': ObjectId(tweet_id)})
     image_url = existing_tweet.get('image', '') if existing_tweet else ''
 
@@ -473,8 +444,7 @@ async def editTweet(request: Request, tweet_id: str):
         if file.filename.endswith(('.jpg', '.jpeg', '.png')):
             contents = await file.read()
             blob_name = f'tweet_images/{tweet_id}/{file.filename}'
-            azure_container_client.upload_blob(
-                name=blob_name, data=contents, overwrite=True)
+            azure_container_client.upload_blob(name=blob_name, data=contents, overwrite=True)
             blob_client = azure_container_client.get_blob_client(blob_name)
             image_url = blob_client.url
 
@@ -489,7 +459,6 @@ async def editTweet(request: Request, tweet_id: str):
     return RedirectResponse('/', status_code=status.HTTP_302_FOUND)
 
 
-# Timeline
 @app.get("/timeline", response_class=HTMLResponse)
 async def timeline(request: Request):
     id_token = request.cookies.get('token')
@@ -519,7 +488,6 @@ async def timeline(request: Request):
     })
 
 
-# Retweet
 @app.post("/retweet/{tweet_id}", response_class=RedirectResponse)
 async def retweet(request: Request, tweet_id: str):
     id_token = request.cookies.get('token')
@@ -543,4 +511,4 @@ async def retweet(request: Request, tweet_id: str):
         'original_username': original_tweet['username']
     }
     tweet_collection.insert_one(retweet_dict)
-    return
+    return RedirectResponse('/', status_code=status.HTTP_302_FOUND)

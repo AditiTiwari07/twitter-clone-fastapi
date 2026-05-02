@@ -22,20 +22,20 @@
             <h2>Search</h2>
 
             <form action="/search" method="post">
-                <input type="text" name="query" placeholder="Enter search term" required/>
+                <input type="text" name="query" placeholder="Enter search term" required
+                    value="{{ query if query else '' }}"/>
                 <select name="search_type">
-                    <option value="username">Search Users</option>
-                    <option value="tweet">Search Tweets</option>
+                    <option value="username" {% if search_type == 'username' %}selected{% endif %}>Search Users</option>
+                    <option value="tweet" {% if search_type == 'tweet' %}selected{% endif %}>Search Tweets</option>
                 </select>
                 <input type="submit" value="Search" class="btn"/>
             </form>
 
-            <!-- User results -->
             {% if users %}
             <h3>Users found:</h3>
             {% for user in users %}
             <div class="tweet">
-                {% if user['profile_pic'] %}
+                {% if user.get('profile_pic') %}
                 <img src="{{ user['profile_pic'] }}" class="profile-pic"/>
                 {% endif %}
                 <a href="/profile/{{ user['username'] }}">@{{ user['username'] }}</a>
@@ -43,7 +43,6 @@
             {% endfor %}
             {% endif %}
 
-            <!-- Tweet results -->
             {% if tweets %}
             <h3>Tweets found:</h3>
             {% for tweet in tweets %}
