@@ -12,7 +12,10 @@ from bson import ObjectId
 from azure.storage.blob import BlobServiceClient, AccessPolicy, ContainerSasPermissions, PublicAccess
 
 # MongoDB connection
-uri = "mongodb+srv://aditiuser:shubh%40123@cluster0.6opbt4j.mongodb.net/?appName=Cluster0"
+from dotenv import load_dotenv
+import os
+load_dotenv()
+uri = os.getenv("MONGO_URI")
 
 client = MongoClient(uri, server_api=ServerApi('1'))
 
